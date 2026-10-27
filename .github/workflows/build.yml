@@ -1,0 +1,70 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
+          cache: false
+
+      - name: Preparar SDK Android
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          if [ -z "$SDK" ] || [ ! -d "$SDK" ]; then
+            SDK=/usr/local/lib/android/sdk
+          fi
+          echo "SDK: $SDK"
+
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK"     >> "$GITHUB_ENV"
+          echo "sdk.dir=$SDK" > local.properties
+
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SM" --licenses > /dev/null 2>&1 || true
+          "$SM" --install "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
+          echo "SDK pronto."
+
+      - name: Compilar o agente GATEALL (3 arquiteturas)
+        working-directory: app/src/main/assets/agent
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o gateall-agent-arm64 main.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm   go build -ldflags="-s -w" -o gateall-agent-arm   main.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o gateall-agent-x86_64 main.go
+          echo "--- binarios gerados ---"
+          ls -la gateall-agent-*
+
+      - name: Gradle wrapper
+        run: gradle wrapper --gradle-version 8.7
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Conferir se os agentes entraram no APK
+        run: |
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep gateall-agent
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GATEALL-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
