@@ -1,0 +1,13 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+app/build/
+app/src/main/assets/agent/gateall-agent-arm
+app/src/main/assets/agent/gateall-agent-arm64
+app/src/main/assets/agent/gateall-agent-x86_64
