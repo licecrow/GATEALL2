@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#05070C</color>
+    <color name="gate_green">#2BE3A0</color>
+    <color name="gate_blue">#4DA3FF</color>
+</resources>
