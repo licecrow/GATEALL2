@@ -1,0 +1,5 @@
+-keep class dadb.** { *; }
+-keep class jcifs.** { *; }
+-dontwarn org.bouncycastle.**
+-dontwarn javax.**
+-dontwarn org.slf4j.**
