@@ -114,9 +114,68 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .filter { it.ip != ip }
 
             _devices.value = identified
-            _status.value = "${identified.size} aparelho(s) na rede"
+            _status.value = "${identified.size} aparelho(s) na rede. Toque em um para invadir."
             _scanning.value = false
         }
+    }
+
+    /**
+     * Ação principal: uma tecla so.
+     * Se ja tem porta -> abre. Se tem ADB -> instala a porta e abre.
+     * Senao -> tenta ADB direto.
+     */
+    fun invade(device: Device) {
+        viewModelScope.launch {
+            _status.value = "Invadindo ${device.ip}..."
+
+            // 1. Ja tem agente rodando? Abre direto.
+            val temAgente = device.protocol == Protocol.AGENT ||
+                scanner.tcpOpen(device.ip, AgentInstaller.PORT, 600)
+
+            if (temAgente) {
+                val alvo = device.copy(protocol = Protocol.AGENT, agentPort = AgentInstaller.PORT)
+                salvar(alvo)
+                openDevice(alvo)
+                return@launch
+            }
+
+            // 2. Tem ADB aberto? Instala o agente.
+            if (scanner.tcpOpen(device.ip, 5555, 900)) {
+                _status.value = "Instalando porta em ${device.ip}..."
+                val ok = installer.install(device.ip)
+
+                if (ok) {
+                    val alvo = device.copy(protocol = Protocol.AGENT, agentPort = AgentInstaller.PORT)
+                    salvar(alvo)
+                    openDevice(alvo)
+                } else {
+                    _status.value = "Agente falhou. Abrindo via ADB direto..."
+                    openDevice(device.copy(protocol = Protocol.ADB))
+                }
+                return@launch
+            }
+
+            // 3. Tem SMB? Abre.
+            if (scanner.tcpOpen(device.ip, 445, 900) || scanner.tcpOpen(device.ip, 139, 900)) {
+                openDevice(device.copy(protocol = Protocol.SMB))
+                return@launch
+            }
+
+            _status.value =
+                "Porta 5555 fechada. No alvo: Opcoes do desenvolvedor -> Depuracao USB, " +
+                    "depois rode no PC: adb tcpip 5555"
+        }
+    }
+
+    private fun salvar(device: Device) {
+        store.save(
+            SavedTarget(
+                device = device,
+                protocol = device.protocol,
+                agentPort = device.agentPort
+            )
+        )
+        _saved.value = store.all()
     }
 
     fun installAgent(device: Device) {
@@ -125,24 +184,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
             val ok = installer.install(device.ip)
 
-            _status.value = if (ok) {
-                store.save(
-                    SavedTarget(
-                        device = device.copy(
-                            protocol = Protocol.AGENT,
-                            agentPort = AgentInstaller.PORT
-                        ),
-                        protocol = Protocol.AGENT,
-                        agentPort = AgentInstaller.PORT
-                    )
-                )
-                _saved.value = store.all()
-                "Porta instalada em ${device.label}"
+            if (ok) {
+                val alvo = device.copy(protocol = Protocol.AGENT, agentPort = AgentInstaller.PORT)
+                salvar(alvo)
+                _status.value = "Porta instalada em ${device.label}"
+                scan()
             } else {
-                "Falha. Depuração USB ligada e aparelho autorizado?"
+                _status.value = "Falha. Depuracao USB ligada e aparelho autorizado?"
             }
-
-            scan()
         }
     }
 
@@ -214,13 +263,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Sobe um nivel. Em ADB/agente vai ate a raiz "/". */
     fun up() {
         val fs = _session.value ?: return
         val current = _path.value
-        if (current.isEmpty() || current == fs.rootPath) return
+        val limite = if (fs.protocol == Protocol.SMB) fs.rootPath else "/"
+        if (current.length <= limite.length) return
 
-        val parent = current.trimEnd('/').substringBeforeLast('/', "")
-        navigate(if (parent.length < fs.rootPath.length) fs.rootPath else parent)
+        val pai = current.trimEnd('/').substringBeforeLast('/', "")
+        navigate(if (pai.length < limite.length) limite else pai)
+    }
+
+    /** Vai direto pra raiz do sistema de arquivos. */
+    fun goRoot() {
+        val fs = _session.value ?: return
+        if (fs.protocol == Protocol.SMB) return
+        navigate("/")
+    }
+
+    /** Vai direto pro armazenamento interno. */
+    fun goSdcard() {
+        val fs = _session.value ?: return
+        if (fs.protocol == Protocol.SMB) return
+        navigate("/sdcard")
     }
 
     fun closeSession() {
