@@ -1,5 +1,6 @@
 package com.gateall.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,27 +14,30 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.DevicesOther
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.LaptopMac
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
 import androidx.compose.material.icons.filled.Radar
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +55,10 @@ fun NetworkScreen(vm: MainViewModel, onOpen: (Device) -> Unit) {
     val status by vm.status.collectAsState()
     val ssid by vm.networkName.collectAsState()
     val localIp by vm.localIp.collectAsState()
+
+    var selecionado by remember { mutableStateOf<Device?>(null) }
+    var manual by remember { mutableStateOf(false) }
+    var ipManual by remember { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
 
@@ -78,6 +86,11 @@ fun NetworkScreen(vm: MainViewModel, onOpen: (Device) -> Unit) {
                 Spacer(Modifier.width(6.dp))
                 Text(if (scanning) "Varrendo..." else "ESCANEAR")
             }
+            OutlinedButton(onClick = { manual = true }) {
+                Icon(Icons.Default.Add, null)
+                Spacer(Modifier.width(6.dp))
+                Text("IP")
+            }
             if (scanning) {
                 CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
             }
@@ -96,24 +109,116 @@ fun NetworkScreen(vm: MainViewModel, onOpen: (Device) -> Unit) {
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(devices, key = { it.ip }) { device ->
-                DeviceCard(
-                    device = device,
-                    onOpen = { onOpen(device) },
-                    onInstall = { vm.installAgent(device) },
-                    onRemove = { vm.removeAgent(device) }
-                )
+                DeviceCard(device = device, onClick = { selecionado = device })
             }
         }
+    }
+
+    // ---- Menu de acoes do dispositivo ----
+    selecionado?.let { device ->
+        AlertDialog(
+            onDismissRequest = { selecionado = null },
+            title = { Text(device.label) },
+            text = {
+                Column {
+                    Text(
+                        device.ip + (device.mac?.let { "  ·  $it" } ?: ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    if (device.openPorts.isNotEmpty()) {
+                        Text(
+                            "portas abertas: " + device.openPorts.joinToString(", "),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        if (device.protocol == Protocol.AGENT)
+                            "Porta GATEALL ja instalada."
+                        else
+                            "Toque em INVADIR para conectar, instalar a porta e abrir as pastas.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    vm.invade(device)
+                    selecionado = null
+                }) {
+                    Text(if (device.protocol == Protocol.AGENT) "ABRIR" else "INVADIR")
+                }
+            },
+            dismissButton = {
+                Column {
+                    if (device.protocol != Protocol.AGENT) {
+                        TextButton(onClick = {
+                            vm.installAgent(device)
+                            selecionado = null
+                        }) { Text("So instalar a porta") }
+                    } else {
+                        TextButton(onClick = {
+                            vm.removeAgent(device)
+                            selecionado = null
+                        }) { Text("Remover porta") }
+                    }
+
+                    if (device.protocol == Protocol.ADB || device.protocol == Protocol.AGENT) {
+                        TextButton(onClick = {
+                            vm.openDevice(device)
+                            selecionado = null
+                        }) { Text("Abrir pastas") }
+                    }
+
+                    TextButton(onClick = { selecionado = null }) { Text("Cancelar") }
+                }
+            }
+        )
+    }
+
+    // ---- Adicionar por IP ----
+    if (manual) {
+        AlertDialog(
+            onDismissRequest = { manual = false },
+            title = { Text("Invadir por IP") },
+            text = {
+                Column {
+                    Text(
+                        "Digite o IP do aparelho alvo.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = ipManual,
+                        onValueChange = { ipManual = it },
+                        singleLine = true,
+                        placeholder = { Text("192.168.0.10") }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = ipManual.count { it == '.' } == 3,
+                    onClick = {
+                        val d = Device(ip = ipManual.trim(), label = ipManual.trim())
+                        manual = false
+                        ipManual = ""
+                        vm.invade(d)
+                    }
+                ) { Text("INVADIR") }
+            },
+            dismissButton = {
+                TextButton(onClick = { manual = false }) { Text("Cancelar") }
+            }
+        )
     }
 }
 
 @Composable
-private fun DeviceCard(
-    device: Device,
-    onOpen: () -> Unit,
-    onInstall: () -> Unit,
-    onRemove: () -> Unit
-) {
+private fun DeviceCard(device: Device, onClick: () -> Unit) {
+
     val icon = when (device.os) {
         OsKind.ANDROID -> Icons.Default.PhoneAndroid
         OsKind.IOS -> Icons.Default.PhoneIphone
@@ -123,12 +228,25 @@ private fun DeviceCard(
         OsKind.UNKNOWN -> Icons.Default.DevicesOther
     }
 
-    Card(Modifier.fillMaxWidth()) {
+    val etiqueta = when (device.protocol) {
+        Protocol.AGENT -> "PORTA INSTALADA"
+        Protocol.ADB -> "ADB ABERTO"
+        Protocol.SMB -> "SMB"
+        Protocol.NONE -> "TOQUE PARA INVADIR"
+    }
+
+    val cor = when (device.protocol) {
+        Protocol.AGENT -> MaterialTheme.colorScheme.primary
+        Protocol.ADB -> MaterialTheme.colorScheme.secondary
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    }
+
+    Card(Modifier.fillMaxWidth().clickable { onClick() }) {
         Row(
             Modifier.padding(14.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
+            Icon(icon, null, tint = cor)
             Spacer(Modifier.width(12.dp))
 
             Column(Modifier.weight(1f)) {
@@ -141,37 +259,10 @@ private fun DeviceCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
-                if (device.openPorts.isNotEmpty()) {
-                    Text(
-                        "portas: " + device.openPorts.joinToString(","),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                    )
-                }
+                Text(etiqueta, style = MaterialTheme.typography.labelSmall, color = cor)
             }
 
-            when (device.protocol) {
-                Protocol.AGENT -> {
-                    AssistChip(onClick = onOpen, label = { Text("ABRIR") })
-                    IconButton(onClick = onRemove) { Icon(Icons.Default.Close, "remover") }
-                }
-
-                Protocol.ADB -> {
-                    AssistChip(
-                        onClick = onInstall,
-                        label = { Text("INSTALAR PORTA") },
-                        leadingIcon = { Icon(Icons.Default.Download, null, Modifier.size(16.dp)) }
-                    )
-                    IconButton(onClick = onOpen) { Icon(Icons.Default.Folder, "abrir") }
-                }
-
-                Protocol.SMB -> AssistChip(onClick = onOpen, label = { Text("ABRIR SMB") })
-
-                Protocol.NONE -> Text(
-                    "-",
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                )
-            }
+            Text("›", style = MaterialTheme.typography.headlineSmall, color = cor)
         }
     }
 }
