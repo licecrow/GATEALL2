@@ -13,8 +13,10 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.gateall.app.data.Protocol
 import com.gateall.app.data.RemoteEntry
 import com.gateall.app.ui.humanSize
 import com.gateall.app.vm.MainViewModel
@@ -42,6 +45,8 @@ fun BrowserScreen(vm: MainViewModel, onPreview: (RemoteEntry) -> Unit) {
     val entries by vm.entries.collectAsState()
     val status by vm.status.collectAsState()
     val progress by vm.progress.collectAsState()
+
+    val remoto = fs?.protocol != Protocol.SMB
 
     Column(Modifier.fillMaxSize()) {
 
@@ -65,6 +70,14 @@ fun BrowserScreen(vm: MainViewModel, onPreview: (RemoteEntry) -> Unit) {
                 }
             },
             actions = {
+                if (remoto) {
+                    IconButton(onClick = { vm.goRoot() }) {
+                        Icon(Icons.Default.Home, "raiz")
+                    }
+                    IconButton(onClick = { vm.goSdcard() }) {
+                        Icon(Icons.Default.PhoneAndroid, "armazenamento")
+                    }
+                }
                 IconButton(onClick = { vm.closeSession() }) {
                     Icon(Icons.AutoMirrored.Filled.Logout, "sair")
                 }
@@ -84,6 +97,15 @@ fun BrowserScreen(vm: MainViewModel, onPreview: (RemoteEntry) -> Unit) {
                 Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary
+            )
+        }
+
+        if (entries.isEmpty() && status.isBlank()) {
+            Text(
+                "Pasta vazia ou sem permissao de leitura.",
+                Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         }
 
