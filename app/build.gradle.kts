@@ -34,14 +34,26 @@ android {
     }
 
     packaging {
-        resources.excludes += setOf(
-            "META-INF/DEPENDENCIES",
-            "META-INF/LICENSE",
-            "META-INF/LICENSE.txt",
-            "META-INF/NOTICE",
-            "META-INF/NOTICE.txt",
-            "META-INF/*.kotlin_module"
-        )
+        resources {
+            excludes += setOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/LICENSE.md",
+                "META-INF/LICENSE-notice.md",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/NOTICE.md",
+                "META-INF/ASL2.0",
+                "META-INF/*.kotlin_module",
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+                "META-INF/INDEX.LIST"
+            )
+            pickFirsts += setOf(
+                "META-INF/io.netty.versions.properties",
+                "META-INF/services/javax.annotation.processing.Processor"
+            )
+        }
     }
 
     buildTypes {
