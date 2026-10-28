@@ -17,46 +17,17 @@ class AdbGateway(private val ip: String, private val port: Int = 5555) {
     suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             dadb = Dadb.create(ip, port)
-            exec("echo gateall_ok").contains("gateall_ok")
+            shell("echo gateall_ok").contains("gateall_ok")
         }.getOrDefault(false)
     }
 
-    suspend fun props(): Map<String, String> = withContext(Dispatchers.IO) {
-        val wanted = setOf(
-            "ro.product.brand",
-            "ro.product.model",
-            "ro.product.manufacturer",
-            "ro.build.version.release",
-            "ro.product.device"
-        )
-
-        val raw = exec("getprop")
-        if (raw.isBlank()) return@withContext emptyMap()
-
-        raw.split("\n")
-            .mapNotNull { line ->
-                val m = Regex("\\[(.*?)\\]:\\s*\\[(.*?)\\]").find(line)
-                    ?: return@mapNotNull null
-                m.groupValues[1] to m.groupValues[2]
-            }
-            .filter { it.first in wanted }
-            .toMap()
-    }
-
-    suspend fun list(path: String): List<RemoteEntry> = withContext(Dispatchers.IO) {
-        val safe = path.replace("\"", "\\\"")
-        exec("ls -la \"$safe\"")
-            .split("\n")
-            .mapNotNull { parseLine(it, path) }
-    }
-
     /**
-     * Executa um comando e devolve sempre texto.
+     * Executa um comando no aparelho alvo e devolve sempre texto.
      * Nao assume o tipo de retorno do dadb — converte de forma defensiva.
      */
-    private suspend fun exec(cmd: String): String {
+    suspend fun shell(cmd: String): String = withContext(Dispatchers.IO) {
         val raw: Any? = runCatching { dadb!!.shell(cmd) }.getOrNull()
-        return asText(raw)
+        asText(raw)
     }
 
     private fun asText(raw: Any?): String {
@@ -74,6 +45,35 @@ class AdbGateway(private val ip: String, private val port: Int = 5555) {
         }
 
         return obj.toString()
+    }
+
+    suspend fun props(): Map<String, String> = withContext(Dispatchers.IO) {
+        val wanted = setOf(
+            "ro.product.brand",
+            "ro.product.model",
+            "ro.product.manufacturer",
+            "ro.build.version.release",
+            "ro.product.device"
+        )
+
+        val raw = shell("getprop")
+        if (raw.isBlank()) return@withContext emptyMap()
+
+        raw.split("\n")
+            .mapNotNull { line ->
+                val m = Regex("\\[(.*?)\\]:\\s*\\[(.*?)\\]").find(line)
+                    ?: return@mapNotNull null
+                m.groupValues[1] to m.groupValues[2]
+            }
+            .filter { it.first in wanted }
+            .toMap()
+    }
+
+    suspend fun list(path: String): List<RemoteEntry> = withContext(Dispatchers.IO) {
+        val safe = path.replace("\"", "\\\"")
+        shell("ls -la \"$safe\"")
+            .split("\n")
+            .mapNotNull { parseLine(it, path) }
     }
 
     private fun parseLine(line: String, parent: String): RemoteEntry? {
