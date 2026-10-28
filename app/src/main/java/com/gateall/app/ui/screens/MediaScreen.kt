@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -71,7 +71,7 @@ fun MediaScreen(vm: MainViewModel, entry: RemoteEntry, onBack: () -> Unit) {
             title = { Text(entry.name, style = MaterialTheme.typography.titleSmall) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, "voltar")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "voltar")
                 }
             },
             actions = {
