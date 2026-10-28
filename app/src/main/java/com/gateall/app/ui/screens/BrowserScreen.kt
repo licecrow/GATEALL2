@@ -8,12 +8,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -61,12 +61,12 @@ fun BrowserScreen(vm: MainViewModel, onPreview: (RemoteEntry) -> Unit) {
             },
             navigationIcon = {
                 IconButton(onClick = { vm.up() }) {
-                    Icon(Icons.Default.ArrowBack, "voltar")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "voltar")
                 }
             },
             actions = {
                 IconButton(onClick = { vm.closeSession() }) {
-                    Icon(Icons.Default.Logout, "sair")
+                    Icon(Icons.AutoMirrored.Filled.Logout, "sair")
                 }
             }
         )
@@ -131,7 +131,7 @@ private fun EntryRow(
                     entry.isDir -> Icons.Default.Folder
                     entry.isImage -> Icons.Default.Image
                     entry.isVideo -> Icons.Default.Movie
-                    else -> Icons.Default.InsertDriveFile
+                    else -> Icons.AutoMirrored.Filled.InsertDriveFile
                 },
                 null,
                 tint = if (entry.isDir) {
