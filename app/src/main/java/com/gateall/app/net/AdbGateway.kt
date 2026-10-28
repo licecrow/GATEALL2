@@ -17,7 +17,7 @@ class AdbGateway(private val ip: String, private val port: Int = 5555) {
     suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             dadb = Dadb.create(ip, port)
-            dadb?.shell("echo gateall_ok")?.contains("gateall_ok") == true
+            exec("echo gateall_ok").contains("gateall_ok")
         }.getOrDefault(false)
     }
 
@@ -30,27 +30,50 @@ class AdbGateway(private val ip: String, private val port: Int = 5555) {
             "ro.product.device"
         )
 
-        runCatching {
-            dadb!!.shell("getprop").lines()
-                .mapNotNull { line ->
-                    val m = Regex("\\[(.*?)\\]:\\s*\\[(.*?)\\]").find(line)
-                        ?: return@mapNotNull null
-                    m.groupValues[1] to m.groupValues[2]
-                }
-                .filter { it.first in wanted }
-                .toMap()
-        }.getOrDefault(emptyMap())
-    }
+        val raw = exec("getprop")
+        if (raw.isBlank()) return@withContext emptyMap()
 
-    suspend fun shell(cmd: String): String = withContext(Dispatchers.IO) {
-        runCatching { dadb!!.shell(cmd) }.getOrDefault("")
+        raw.split("\n")
+            .mapNotNull { line ->
+                val m = Regex("\\[(.*?)\\]:\\s*\\[(.*?)\\]").find(line)
+                    ?: return@mapNotNull null
+                m.groupValues[1] to m.groupValues[2]
+            }
+            .filter { it.first in wanted }
+            .toMap()
     }
 
     suspend fun list(path: String): List<RemoteEntry> = withContext(Dispatchers.IO) {
         val safe = path.replace("\"", "\\\"")
-        shell("ls -la \"$safe\"")
-            .lines()
+        exec("ls -la \"$safe\"")
+            .split("\n")
             .mapNotNull { parseLine(it, path) }
+    }
+
+    /**
+     * Executa um comando e devolve sempre texto.
+     * Nao assume o tipo de retorno do dadb — converte de forma defensiva.
+     */
+    private suspend fun exec(cmd: String): String {
+        val raw: Any? = runCatching { dadb!!.shell(cmd) }.getOrNull()
+        return asText(raw)
+    }
+
+    private fun asText(raw: Any?): String {
+        if (raw == null) return ""
+        if (raw is String) return raw
+
+        val obj: Any = raw
+
+        // Alguns builds do dadb devolvem um stream em vez de String.
+        for (nome in listOf("readString", "readUtf8", "read")) {
+            val v = runCatching {
+                obj.javaClass.getMethod(nome).invoke(obj)
+            }.getOrNull()
+            if (v is String) return v
+        }
+
+        return obj.toString()
     }
 
     private fun parseLine(line: String, parent: String): RemoteEntry? {
